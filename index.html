@@ -1,85 +1,217 @@
 <!DOCTYPE html>
-<html>
+<html lang="pt-BR">
 <head>
-  <title>Análise do Dólar</title>
-  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Projeção do Dólar</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background-color: #f4f4f4;
+            color: #333;
+            margin: 0;
+            padding: 0;
+        }
+
+        .container {
+            width: 90%;
+            max-width: 600px;
+            margin: 20px auto;
+            padding: 20px;
+            background-color: #fff;
+            box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+            border-radius: 8px;
+        }
+
+        h1 {
+            text-align: center;
+            color: #007BFF;
+        }
+
+        .section {
+            margin-bottom: 20px;
+        }
+
+        .section h2 {
+            color: #0056b3;
+            border-bottom: 2px solid #007BFF;
+            padding-bottom: 10px;
+        }
+
+        p {
+            font-size: 18px;
+            line-height: 1.6;
+        }
+
+        .loading {
+            color: #888;
+            font-style: italic;
+        }
+
+        .error {
+            color: red;
+            font-weight: bold;
+        }
+
+        .spinner {
+            border: 4px solid #f3f3f3;
+            border-top: 4px solid #3498db;
+            border-radius: 50%;
+            width: 30px;
+            height: 30px;
+            animation: spin 1s linear infinite;
+            margin: 0 auto;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+    </style>
 </head>
 <body>
-  <canvas id="myChart"></canvas>
+    <div class="container">
+        <h1>Projeção do Dólar</h1>
+        
+        <!-- Seção 1: Preço Atual do Dólar -->
+        <div class="section">
+            <h2>Preço Atual do Dólar</h2>
+            <p>Compra: <span id="dolar-compra" class="loading"><div class="spinner"></div></span></p>
+            <p>Venda: <span id="dolar-venda" class="loading"><div class="spinner"></div></span></p>
+        </div>
 
-  <script>
-    const apiKey = 'DK5Y4FX25XHSRQ16';
+        <!-- Seção 2: Variação do Dólar (Últimos 15 Dias) -->
+        <div class="section">
+            <h2>Variação do Dólar (Últimos 15 Dias)</h2>
+            <div id="variacao-dolar">
+                <p class="loading"><div class="spinner"></div></p>
+            </div>
+        </div>
 
-    // Função para buscar a cotação atual
-    async function buscarCotacaoAtual() {
-      // ... (código já existente para buscar cotação atual)
-    }
+        <!-- Seção 3: Projeção Futura do Dólar -->
+        <div class="section">
+            <h2>Projeção Futura do Dólar</h2>
+            <p>Valor Mínimo Estimado: <span id="projecao-minima" class="loading"><div class="spinner"></div></span></p>
+            <p>Valor Máximo Estimado: <span id="projecao-maxima" class="loading"><div class="spinner"></div></span></p>
+        </div>
+    </div>
 
-    // Função para buscar a série temporal diária
-    async function buscarSerieTemporal() {
-      const response = await fetch(`https://www.alphavantage.co/query?function=TIME_SERIES_DAILY&symbol=USD/BRL&apikey=${apiKey}`);
-      const data = await response.json();
+    <script>
+        const ALPHA_VANTAGE_API_KEY = 'DK5Y4FX25XHSRQ16';
 
-      const dates = [];
-      const prices = [];
-      for (const date in data['Time Series Daily']) {
-        dates.push(date);
-        prices.push(data['Time Series Daily'][date]['4. close']);
-      }
+        async function buscarDolar() {
+            try {
+                const response = await fetch('https://economia.awesomeapi.com.br/json/last/USD-BRL');
+                const data = await response.json();
+                const dolar = data.USDBRL;
 
-      return { dates, prices };
-    }
+                document.getElementById('dolar-compra').innerHTML = `R$ ${parseFloat(dolar.bid).toFixed(2)}`;
+                document.getElementById('dolar-venda').innerHTML = `R$ ${parseFloat(dolar.ask).toFixed(2)}`;
 
-    // Função para criar o gráfico
-    function criarGrafico(labels, data) {
-      const ctx = document.getElementById('myChart').getContext('2d');
-      new Chart(ctx, {
-        type: 'line',
-        data: {
-          labels: labels,
-          datasets: [{
-            label: 'Cotação do Dólar',
-            data: data,
-            borderColor: 'blue',
-            fill: false
-          }]
-        },
-        options: {
-          scales: {
-            x: {
-              title: {
-                display: true,
-                text: 'Data'
-              }
-            },
-            y: {
-              title: {
-                display: true,
-                text: 'Cotação'
-              }
+                const [petroleo, ouro, selic, inflacao] = await Promise.all([
+                    buscarPetroleo(),
+                    buscarOuro(),
+                    buscarSelic(),
+                    buscarInflacao()
+                ]);
+
+                calcularProjecao(parseFloat(dolar.bid), petroleo, ouro, selic, inflacao);
+                buscarVariacaoDolar();
+            } catch (error) {
+                console.error('Erro ao buscar dados do dólar:', error);
+                document.getElementById('dolar-compra').innerHTML = 'Erro ao carregar';
+                document.getElementById('dolar-venda').innerHTML = 'Erro ao carregar';
+                document.getElementById('dolar-compra').classList.add('error');
+                document.getElementById('dolar-venda').classList.add('error');
             }
-          }
         }
-      });
-    }
 
-    // Função para calcular uma previsão simples (média móvel)
-    function calcularPrevisao(prices) {
-      const windowSize = 5; // Tamanho da janela para a média móvel
-      const previsao = prices.slice(-windowSize).reduce((a, b) => a + b) / windowSize;
-      return previsao;
-    }
+        async function buscarPetroleo() {
+            try {
+                const response = await fetch(`https://www.alphavantage.co/query?function=WTI&interval=daily&apikey=${ALPHA_VANTAGE_API_KEY}`);
+                const data = await response.json();
+                return parseFloat(data.data[0].value);
+            } catch (error) {
+                console.error('Erro ao buscar petróleo:', error);
+                return 80; // Valor fallback
+            }
+        }
 
-    // Chamada das funções
-    async function main() {
-      await buscarCotacaoAtual();
-      const { dates, prices } = await buscarSerieTemporal();
-      criarGrafico(dates, prices);
-      const previsao = calcularPrevisao(prices);
-      console.log('Previsão:', previsao);
-    }
+        async function buscarOuro() {
+            try {
+                const response = await fetch(`https://www.alphavantage.co/query?function=GOLD&interval=daily&apikey=${ALPHA_VANTAGE_API_KEY}`);
+                const data = await response.json();
+                return parseFloat(data.data[0].value);
+            } catch (error) {
+                console.error('Erro ao buscar ouro:', error);
+                return 1800; // Valor fallback
+            }
+        }
 
-    main();
-  </script>
+        async function buscarSelic() {
+            try {
+                const response = await fetch('https://api.bcb.gov.br/dados/serie/bcdata.sgs.4189/dados/ultimos/1?formato=json');
+                const data = await response.json();
+                return parseFloat(data[0].valor);
+            } catch (error) {
+                console.error('Erro ao buscar SELIC:', error);
+                return 13.75; // Valor fallback
+            }
+        }
+
+        async function buscarInflacao() {
+            try {
+                const response = await fetch('https://api.bcb.gov.br/dados/serie/bcdata.sgs.433/dados/ultimos/1?formato=json');
+                const data = await response.json();
+                return parseFloat(data[0].valor);
+            } catch (error) {
+                console.error('Erro ao buscar inflação:', error);
+                return 5.5; // Valor fallback
+            }
+        }
+
+        async function buscarVariacaoDolar() {
+            try {
+                const response = await fetch('https://economia.awesomeapi.com.br/json/daily/USD-BRL/15');
+                const data = await response.json();
+
+                const variacaoDiv = document.getElementById('variacao-dolar');
+                variacaoDiv.innerHTML = '';
+
+                data.forEach((dia) => {
+                    const variacao = document.createElement('p');
+                    variacao.textContent = `${new Date(dia.timestamp * 1000).toLocaleDateString()}: R$ ${parseFloat(dia.bid).toFixed(2)}`;
+                    variacaoDiv.appendChild(variacao);
+                });
+            } catch (error) {
+                console.error('Erro ao buscar variação do dólar:', error);
+                const variacaoDiv = document.getElementById('variacao-dolar');
+                variacaoDiv.innerHTML = '<p class="error">Erro ao carregar variação.</p>';
+            }
+        }
+
+        function calcularProjecao(dolarAtual, petroleo, ouro, selic, inflacao) {
+            if (isNaN(petroleo) || petroleo < 10 || petroleo > 200) petroleo = 80;
+            if (isNaN(ouro) || ouro < 1000 || ouro > 3000) ouro = 1800;
+            if (isNaN(selic) || selic < 0 || selic > 20) selic = 13.75;
+            if (isNaN(inflacao) || inflacao < 0 || inflacao > 20) inflacao = 5.5;
+
+            const k1 = 0.0001;
+            const k2 = 0.00005;
+            const k3 = -0.0002;
+            const k4 = 0.0003;
+            const k5 = 0.00001;
+
+            const variacao = (petroleo * k1) + (ouro * k2) + (selic * k3) + (inflacao * k4) + (250 * k5);
+
+            const projecaoMinima = dolarAtual * (1 + variacao - 0.02);
+            const projecaoMaxima = dolarAtual * (1 + variacao + 0.02);
+
+            document.getElementById('projecao-minima').innerHTML = `R$ ${projecaoMinima.toFixed(2)}`;
+            document.getElementById('projecao-maxima').innerHTML = `R$ ${projecaoMaxima.toFixed(2)}`;
+        }
+
+        buscarDolar();
+    </script>
 </body>
 </html>
