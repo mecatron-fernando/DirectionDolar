@@ -52,21 +52,6 @@
             color: red;
             font-weight: bold;
         }
-
-        .spinner {
-            border: 4px solid #f3f3f3;
-            border-top: 4px solid #3498db;
-            border-radius: 50%;
-            width: 30px;
-            height: 30px;
-            animation: spin 1s linear infinite;
-            margin: 0 auto;
-        }
-
-        @keyframes spin {
-            0% { transform: rotate(0deg); }
-            100% { transform: rotate(360deg); }
-        }
     </style>
 </head>
 <body>
@@ -76,38 +61,42 @@
         <!-- Seção 1: Preço Atual do Dólar -->
         <div class="section">
             <h2>Preço Atual do Dólar</h2>
-            <p>Compra: <span id="dolar-compra" class="loading"><div class="spinner"></div></span></p>
-            <p>Venda: <span id="dolar-venda" class="loading"><div class="spinner"></div></span></p>
+            <p>Compra: <span id="dolar-compra" class="loading">Carregando...</span></p>
+            <p>Venda: <span id="dolar-venda" class="loading">Carregando...</span></p>
         </div>
 
         <!-- Seção 2: Variação do Dólar (Últimos 15 Dias) -->
         <div class="section">
             <h2>Variação do Dólar (Últimos 15 Dias)</h2>
             <div id="variacao-dolar">
-                <p class="loading"><div class="spinner"></div></p>
+                <p class="loading">Carregando variação...</p>
             </div>
         </div>
 
         <!-- Seção 3: Projeção Futura do Dólar -->
         <div class="section">
             <h2>Projeção Futura do Dólar</h2>
-            <p>Valor Mínimo Estimado: <span id="projecao-minima" class="loading"><div class="spinner"></div></span></p>
-            <p>Valor Máximo Estimado: <span id="projecao-maxima" class="loading"><div class="spinner"></div></span></p>
+            <p>Valor Mínimo Estimado: <span id="projecao-minima" class="loading">Carregando...</span></p>
+            <p>Valor Máximo Estimado: <span id="projecao-maxima" class="loading">Carregando...</span></p>
         </div>
     </div>
 
     <script>
+        // Chave Alpha Vantage
         const ALPHA_VANTAGE_API_KEY = 'DK5Y4FX25XHSRQ16';
 
+        // Função para buscar o preço atual do dólar
         async function buscarDolar() {
             try {
                 const response = await fetch('https://economia.awesomeapi.com.br/json/last/USD-BRL');
                 const data = await response.json();
                 const dolar = data.USDBRL;
 
-                document.getElementById('dolar-compra').innerHTML = `R$ ${parseFloat(dolar.bid).toFixed(2)}`;
-                document.getElementById('dolar-venda').innerHTML = `R$ ${parseFloat(dolar.ask).toFixed(2)}`;
+                // Atualiza os valores na página
+                document.getElementById('dolar-compra').textContent = `R$ ${parseFloat(dolar.bid).toFixed(2)}`;
+                document.getElementById('dolar-venda').textContent = `R$ ${parseFloat(dolar.ask).toFixed(2)}`;
 
+                // Busca dados para projeção
                 const [petroleo, ouro, selic, inflacao] = await Promise.all([
                     buscarPetroleo(),
                     buscarOuro(),
@@ -115,69 +104,87 @@
                     buscarInflacao()
                 ]);
 
+                // Calcula a projeção futura
                 calcularProjecao(parseFloat(dolar.bid), petroleo, ouro, selic, inflacao);
+
+                // Busca a variação dos últimos 15 dias
                 buscarVariacaoDolar();
             } catch (error) {
                 console.error('Erro ao buscar dados do dólar:', error);
-                document.getElementById('dolar-compra').innerHTML = 'Erro ao carregar';
-                document.getElementById('dolar-venda').innerHTML = 'Erro ao carregar';
+                document.getElementById('dolar-compra').textContent = 'Erro ao carregar';
+                document.getElementById('dolar-venda').textContent = 'Erro ao carregar';
                 document.getElementById('dolar-compra').classList.add('error');
                 document.getElementById('dolar-venda').classList.add('error');
             }
         }
 
+        // Função para buscar o preço do petróleo (WTI)
         async function buscarPetroleo() {
             try {
                 const response = await fetch(`https://www.alphavantage.co/query?function=WTI&interval=daily&apikey=${ALPHA_VANTAGE_API_KEY}`);
                 const data = await response.json();
-                return parseFloat(data.data[0].value);
+                const petroleo = parseFloat(data.data[0].value);
+                console.log("Petróleo:", petroleo); // Debug
+                return petroleo;
             } catch (error) {
                 console.error('Erro ao buscar petróleo:', error);
                 return 80; // Valor fallback
             }
         }
 
+        // Função para buscar o preço do ouro
         async function buscarOuro() {
             try {
                 const response = await fetch(`https://www.alphavantage.co/query?function=GOLD&interval=daily&apikey=${ALPHA_VANTAGE_API_KEY}`);
                 const data = await response.json();
-                return parseFloat(data.data[0].value);
+                const ouro = parseFloat(data.data[0].value);
+                console.log("Ouro:", ouro); // Debug
+                return ouro;
             } catch (error) {
                 console.error('Erro ao buscar ouro:', error);
                 return 1800; // Valor fallback
             }
         }
 
+        // Função para buscar a taxa SELIC
         async function buscarSelic() {
             try {
                 const response = await fetch('https://api.bcb.gov.br/dados/serie/bcdata.sgs.4189/dados/ultimos/1?formato=json');
                 const data = await response.json();
-                return parseFloat(data[0].valor);
+                const selic = parseFloat(data[0].valor);
+                console.log("SELIC:", selic); // Debug
+                return selic;
             } catch (error) {
                 console.error('Erro ao buscar SELIC:', error);
                 return 13.75; // Valor fallback
             }
         }
 
+        // Função para buscar a inflação (IPCA)
         async function buscarInflacao() {
             try {
                 const response = await fetch('https://api.bcb.gov.br/dados/serie/bcdata.sgs.433/dados/ultimos/1?formato=json');
                 const data = await response.json();
-                return parseFloat(data[0].valor);
+                const inflacao = parseFloat(data[0].valor);
+                console.log("Inflação:", inflacao); // Debug
+                return inflacao;
             } catch (error) {
                 console.error('Erro ao buscar inflação:', error);
                 return 5.5; // Valor fallback
             }
         }
 
+        // Função para buscar a variação do dólar nos últimos 15 dias
         async function buscarVariacaoDolar() {
             try {
                 const response = await fetch('https://economia.awesomeapi.com.br/json/daily/USD-BRL/15');
                 const data = await response.json();
 
+                // Limpa o conteúdo de loading
                 const variacaoDiv = document.getElementById('variacao-dolar');
                 variacaoDiv.innerHTML = '';
 
+                // Exibe a variação dos últimos dias
                 data.forEach((dia) => {
                     const variacao = document.createElement('p');
                     variacao.textContent = `${new Date(dia.timestamp * 1000).toLocaleDateString()}: R$ ${parseFloat(dia.bid).toFixed(2)}`;
@@ -190,28 +197,37 @@
             }
         }
 
+        // Função para calcular a projeção futura do dólar
         function calcularProjecao(dolarAtual, petroleo, ouro, selic, inflacao) {
-            if (isNaN(petroleo) || petroleo < 10 || petroleo > 200) petroleo = 80;
-            if (isNaN(ouro) || ouro < 1000 || ouro > 3000) ouro = 1800;
-            if (isNaN(selic) || selic < 0 || selic > 20) selic = 13.75;
-            if (isNaN(inflacao) || inflacao < 0 || inflacao > 20) inflacao = 5.5;
+            // Verifica se os valores estão dentro de faixas razoáveis
+            if (isNaN(petroleo) || petroleo < 10 || petroleo > 200) petroleo = 80; // Fallback para petróleo
+            if (isNaN(ouro) || ouro < 1000 || ouro > 3000) ouro = 1800; // Fallback para ouro
+            if (isNaN(selic) || selic < 0 || selic > 20) selic = 13.75; // Fallback para SELIC
+            if (isNaN(inflacao) || inflacao < 0 || inflacao > 20) inflacao = 5.5; // Fallback para inflação
 
-            const k1 = 0.0001;
-            const k2 = 0.00005;
-            const k3 = -0.0002;
-            const k4 = 0.0003;
-            const k5 = 0.00001;
+            // Pesos para cada fator (ajustados para valores mais realistas)
+            const k1 = 0.0001; // Peso do petróleo (ajustado para um impacto menor)
+            const k2 = 0.00005; // Peso do ouro (ajustado para um impacto menor)
+            const k3 = -0.0002; // Peso da SELIC (juros altos valorizam o real)
+            const k4 = 0.0003; // Peso da inflação (ajustado para um impacto menor)
+            const k5 = 0.00001; // Peso do risco país (fixo e com impacto mínimo)
 
+            // Cálculo da variação
             const variacao = (petroleo * k1) + (ouro * k2) + (selic * k3) + (inflacao * k4) + (250 * k5);
 
-            const projecaoMinima = dolarAtual * (1 + variacao - 0.02);
-            const projecaoMaxima = dolarAtual * (1 + variacao + 0.02);
+            // Projeção futura (intervalo de +/- 2% em torno da variação)
+            const projecaoMinima = dolarAtual * (1 + variacao - 0.02); // -2%
+            const projecaoMaxima = dolarAtual * (1 + variacao + 0.02); // +2%
 
-            document.getElementById('projecao-minima').innerHTML = `R$ ${projecaoMinima.toFixed(2)}`;
-            document.getElementById('projecao-maxima').innerHTML = `R$ ${projecaoMaxima.toFixed(2)}`;
+            // Exibe a projeção na página
+            document.getElementById('projecao-minima').textContent = `R$ ${projecaoMinima.toFixed(2)}`;
+            document.getElementById('projecao-maxima').textContent = `R$ ${projecaoMaxima.toFixed(2)}`;
         }
 
+        // Inicia a busca dos dados ao carregar a página
         buscarDolar();
     </script>
 </body>
 </html>
+
+testar o código e ver se funciona
