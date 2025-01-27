@@ -1,198 +1,118 @@
 <!DOCTYPE html>
 <html lang="pt-BR">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Projeção do Dólar</title>
-  <style>
-    body {
-      font-family: Arial, sans-serif;
-      background-color: #f4f4f4;
-      color: #333;
-      text-align: center;
-      padding: 20px;
-    }
-    h1 {
-      color: #0078d7;
-    }
-    .container {
-      background-color: #fff;
-      padding: 20px;
-      border-radius: 10px;
-      box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
-      max-width: 800px;
-      margin: 0 auto;
-    }
-    .result {
-      font-size: 1.5rem;
-      font-weight: bold;
-      margin-top: 20px;
-    }
-    .timelapse {
-      margin-top: 30px;
-    }
-    .timelapse h2 {
-      font-size: 1.2rem;
-      color: #0078d7;
-    }
-    .timelapse ul {
-      list-style: none;
-      padding: 0;
-    }
-    .timelapse li {
-      margin: 10px 0;
-    }
-    .attention {
-      margin-top: 30px;
-      padding: 15px;
-      background-color: #fff3cd;
-      border-left: 6px solid #ffc107;
-      text-align: left;
-    }
-    .attention h2 {
-      font-size: 1.2rem;
-      color: #856404;
-    }
-    .footer {
-      margin-top: 20px;
-      font-size: 0.9rem;
-      color: #666;
-    }
-  </style>
+    <!-- ... (mantenha o head existente) ... -->
 </head>
 <body>
-  <div class="container">
-    <h1>Projeção do Dólar</h1>
-    <p>Esta ferramenta calcula um range de tendência para a cotação do dólar (USD/BRL) com base em dados disponíveis.</p>
-    <div class="result" id="result">Carregando...</div>
-
-    <!-- Timelapse de Evolução do Preço -->
-    <div class="timelapse" id="timelapse">
-      <h2>Evolução do Preço ao Longo do Dia</h2>
-      <ul id="timelapse-list"></ul>
+    <div class="container">
+        <!-- ... (mantenha o container existente) ... -->
     </div>
 
-    <!-- Legenda de Atenção -->
-    <div class="attention" id="attention">
-      <h2>Agenda Econômica</h2>
-      <p id="attention-text">Carregando eventos relevantes...</p>
-    </div>
+    <script>
+        // Chave Alpha Vantage - Obtenha em https://www.alphavantage.co/support/#api-key
+        const ALPHA_VANTAGE_API_KEY = DK5Y4FX25XHSRQ16;
 
-    <div class="footer">
-      Dados atualizados diariamente. Projeção baseada em parâmetros econômicos.
-    </div>
-  </div>
+        async function buscarDolar() {
+            try {
+                const response = await fetch('https://economia.awesomeapi.com.br/json/last/USD-BRL');
+                const data = await response.json();
+                const dolar = data.USDBRL;
 
-  <script>
-    // Função para buscar a cotação atual do dólar
-    async function getDolarRate() {
-      try {
-        const response = await fetch('https://economia.awesomeapi.com.br/json/last/USD-BRL');
-        const data = await response.json();
-        return parseFloat(data.USDBRL.bid);
-      } catch (error) {
-        console.error("Erro ao buscar cotação do dólar:", error);
-        return null;
-      }
-    }
+                document.getElementById('dolar-compra').textContent = `R$ ${parseFloat(dolar.bid).toFixed(2)}`;
+                document.getElementById('dolar-venda').textContent = `R$ ${parseFloat(dolar.ask).toFixed(2)}`;
 
-    // Função para buscar dados históricos do dólar (últimos 7 dias)
-    async function getHistoricalDolarRates() {
-      try {
-        const response = await fetch('https://economia.awesomeapi.com.br/json/daily/USD-BRL/7');
-        const data = await response.json();
-        return data.map(entry => ({
-          date: new Date(entry.timestamp * 1000).toLocaleDateString('pt-BR'),
-          time: new Date(entry.timestamp * 1000).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }),
-          price: parseFloat(entry.bid)
-        }));
-      } catch (error) {
-        console.error("Erro ao buscar dados históricos do dólar:", error);
-        return [];
-      }
-    }
+                // Busca dados para projeção
+                const [petroleo, ouro, selic, inflacao] = await Promise.all([
+                    buscarPetroleo(),
+                    buscarOuro(),
+                    buscarSelic(),
+                    buscarInflacao()
+                ]);
 
-    // Função para buscar eventos da agenda econômica (exemplo fictício)
-    async function getEconomicAgenda() {
-      // Exemplo de eventos (pode ser substituído por uma API ou base de dados)
-      return [
-        "Reunião do Fed: Decisão sobre taxa de juros dos EUA.",
-        "Publicação do IPCA: Dados de inflação no Brasil.",
-        "Relatório de emprego nos EUA: Impacto no dólar global."
-      ];
-    }
+                calcularProjecao(
+                    parseFloat(dolar.bid),
+                    petroleo,
+                    ouro,
+                    selic,
+                    inflacao
+                );
 
-    // Função para calcular a projeção
-    async function calculateProjection() {
-      const now = new Date();
-      const currentHour = now.getHours();
-      const isAfter17h = currentHour >= 17;
+                buscarVariacaoDolar();
+            } catch (error) {
+                console.error('Erro:', error);
+                // Tratamento de erros...
+            }
+        }
 
-      const dolarRate = await getDolarRate();
-      if (dolarRate === null) {
-        return { min: "N/A", max: "N/A", targetDate: "N/A" };
-      }
+        async function buscarPetroleo() {
+            try {
+                const response = await fetch(`https://www.alphavantage.co/query?function=WTI&interval=daily&apikey=${ALPHA_VANTAGE_API_KEY}`);
+                const data = await response.json();
+                return parseFloat(data.data[0].value);
+            } catch (error) {
+                console.error('Erro ao buscar petróleo:', error);
+                return 80; // Valor fallback
+            }
+        }
 
-      const selicRate = await getSelicRate();
+        async function buscarOuro() {
+            try {
+                const response = await fetch(`https://www.alphavantage.co/query?function=GOLD&interval=daily&apikey=${ALPHA_VANTAGE_API_KEY}`);
+                const data = await response.json();
+                return parseFloat(data.data[0].value);
+            } catch (error) {
+                console.error('Erro ao buscar ouro:', error);
+                return 1800; // Valor fallback
+            }
+        }
 
-      // Fatores de influência (exemplo simplificado)
-      const commodityFactor = 1.02; // Ajuste baseado em commodities
-      const riskFactor = 1.01; // Ajuste baseado em risco global
+        async function buscarSelic() {
+            try {
+                const response = await fetch('https://api.bcb.gov.br/dados/serie/bcdata.sgs.4189/dados/ultimos/1?formato=json');
+                const data = await response.json();
+                return parseFloat(data[0].valor);
+            } catch (error) {
+                console.error('Erro ao buscar SELIC:', error);
+                return 13.75; // Valor fallback
+            }
+        }
 
-      // Cálculo da projeção
-      const baseProjection = dolarRate * (selicRate / 100 + 1);
-      const minProjection = (baseProjection * commodityFactor * 0.98).toFixed(2);
-      const maxProjection = (baseProjection * riskFactor * 1.02).toFixed(2);
+        async function buscarInflacao() {
+            try {
+                const response = await fetch('https://api.bcb.gov.br/dados/serie/bcdata.sgs.433/dados/ultimos/1?formato=json');
+                const data = await response.json();
+                return parseFloat(data[0].valor);
+            } catch (error) {
+                console.error('Erro ao buscar inflação:', error);
+                return 5.5; // Valor fallback
+            }
+        }
 
-      // Definir a data de referência
-      const targetDate = new Date();
-      if (isAfter17h) {
-        targetDate.setDate(targetDate.getDate() + 1); // Amanhã
-      }
-      const formattedDate = targetDate.toLocaleDateString('pt-BR', {
-        day: '2-digit',
-        month: '2-digit',
-        year: 'numeric'
-      });
+        function calcularProjecao(dolarAtual, petroleo, ouro, selic, inflacao) {
+            // Fatores e pesos (ajuste conforme necessidade)
+            const k1 = 0.01;  // Petróleo
+            const k2 = 0.005; // Ouro
+            const k3 = -0.02; // SELIC
+            const k4 = 0.03;  // Inflação
+            const k5 = 0.001; // Risco País (fixo por falta de API)
 
-      return {
-        min: minProjection,
-        max: maxProjection,
-        targetDate: formattedDate
-      };
-    }
+            const variacao = (petroleo * k1) + 
+                            (ouro * k2) + 
+                            (selic * k3) + 
+                            (inflacao * k4) + 
+                            (250 * k5); // 250 = risco país fixo
 
-    // Exibir o resultado
-    async function displayProjection() {
-      const projection = await calculateProjection();
-      const resultDiv = document.getElementById('result');
-      resultDiv.innerHTML = `Projeção para ${projection.targetDate}: R$ ${projection.min} a R$ ${projection.max}`;
-    }
+            const projecaoMinima = dolarAtual * (1 + variacao - 0.05);
+            const projecaoMaxima = dolarAtual * (1 + variacao + 0.05);
 
-    // Exibir a timelapse
-    async function displayTimelapse() {
-      const historicalData = await getHistoricalDolarRates();
-      const timelapseList = document.getElementById('timelapse-list');
-      timelapseList.innerHTML = historicalData.map(entry => `
-        <li>${entry.date} - ${entry.time}: R$ ${entry.price.toFixed(2)}</li>
-      `).join('');
-    }
+            document.getElementById('projecao-minima').textContent = `R$ ${projecaoMinima.toFixed(2)}`;
+            document.getElementById('projecao-maxima').textContent = `R$ ${projecaoMaxima.toFixed(2)}`;
+        }
 
-    // Exibir a agenda econômica
-    async function displayEconomicAgenda() {
-      const events = await getEconomicAgenda();
-      const attentionText = document.getElementById('attention-text');
-      attentionText.innerHTML = events.map(event => `• ${event}`).join('<br>');
-    }
+        // ... (mantenha o restante do código existente) ...
 
-    // Executar ao carregar a página
-    async function init() {
-      await displayProjection();
-      await displayTimelapse();
-      await displayEconomicAgenda();
-    }
-
-    init();
-  </script>
+        // Inicia a busca
+        buscarDolar();
+    </script>
 </body>
 </html>
