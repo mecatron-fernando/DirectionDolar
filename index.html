@@ -1,118 +1,85 @@
 <!DOCTYPE html>
-<html lang="pt-BR">
+<html>
 <head>
-    <!-- ... (mantenha o head existente) ... -->
+  <title>Análise do Dólar</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 </head>
 <body>
-    <div class="container">
-        <!-- ... (mantenha o container existente) ... -->
-    </div>
+  <canvas id="myChart"></canvas>
 
-    <script>
-        // Chave Alpha Vantage - Obtenha em https://www.alphavantage.co/support/#api-key
-        const ALPHA_VANTAGE_API_KEY = DK5Y4FX25XHSRQ16;
+  <script>
+    const apiKey = 'DK5Y4FX25XHSRQ16';
 
-        async function buscarDolar() {
-            try {
-                const response = await fetch('https://economia.awesomeapi.com.br/json/last/USD-BRL');
-                const data = await response.json();
-                const dolar = data.USDBRL;
+    // Função para buscar a cotação atual
+    async function buscarCotacaoAtual() {
+      // ... (código já existente para buscar cotação atual)
+    }
 
-                document.getElementById('dolar-compra').textContent = `R$ ${parseFloat(dolar.bid).toFixed(2)}`;
-                document.getElementById('dolar-venda').textContent = `R$ ${parseFloat(dolar.ask).toFixed(2)}`;
+    // Função para buscar a série temporal diária
+    async function buscarSerieTemporal() {
+      const response = await fetch(`https://www.alphavantage.co/query?function=TIME_SERIES_DAILY&symbol=USD/BRL&apikey=${apiKey}`);
+      const data = await response.json();
 
-                // Busca dados para projeção
-                const [petroleo, ouro, selic, inflacao] = await Promise.all([
-                    buscarPetroleo(),
-                    buscarOuro(),
-                    buscarSelic(),
-                    buscarInflacao()
-                ]);
+      const dates = [];
+      const prices = [];
+      for (const date in data['Time Series Daily']) {
+        dates.push(date);
+        prices.push(data['Time Series Daily'][date]['4. close']);
+      }
 
-                calcularProjecao(
-                    parseFloat(dolar.bid),
-                    petroleo,
-                    ouro,
-                    selic,
-                    inflacao
-                );
+      return { dates, prices };
+    }
 
-                buscarVariacaoDolar();
-            } catch (error) {
-                console.error('Erro:', error);
-                // Tratamento de erros...
+    // Função para criar o gráfico
+    function criarGrafico(labels, data) {
+      const ctx = document.getElementById('myChart').getContext('2d');
+      new Chart(ctx, {
+        type: 'line',
+        data: {
+          labels: labels,
+          datasets: [{
+            label: 'Cotação do Dólar',
+            data: data,
+            borderColor: 'blue',
+            fill: false
+          }]
+        },
+        options: {
+          scales: {
+            x: {
+              title: {
+                display: true,
+                text: 'Data'
+              }
+            },
+            y: {
+              title: {
+                display: true,
+                text: 'Cotação'
+              }
             }
+          }
         }
+      });
+    }
 
-        async function buscarPetroleo() {
-            try {
-                const response = await fetch(`https://www.alphavantage.co/query?function=WTI&interval=daily&apikey=${ALPHA_VANTAGE_API_KEY}`);
-                const data = await response.json();
-                return parseFloat(data.data[0].value);
-            } catch (error) {
-                console.error('Erro ao buscar petróleo:', error);
-                return 80; // Valor fallback
-            }
-        }
+    // Função para calcular uma previsão simples (média móvel)
+    function calcularPrevisao(prices) {
+      const windowSize = 5; // Tamanho da janela para a média móvel
+      const previsao = prices.slice(-windowSize).reduce((a, b) => a + b) / windowSize;
+      return previsao;
+    }
 
-        async function buscarOuro() {
-            try {
-                const response = await fetch(`https://www.alphavantage.co/query?function=GOLD&interval=daily&apikey=${ALPHA_VANTAGE_API_KEY}`);
-                const data = await response.json();
-                return parseFloat(data.data[0].value);
-            } catch (error) {
-                console.error('Erro ao buscar ouro:', error);
-                return 1800; // Valor fallback
-            }
-        }
+    // Chamada das funções
+    async function main() {
+      await buscarCotacaoAtual();
+      const { dates, prices } = await buscarSerieTemporal();
+      criarGrafico(dates, prices);
+      const previsao = calcularPrevisao(prices);
+      console.log('Previsão:', previsao);
+    }
 
-        async function buscarSelic() {
-            try {
-                const response = await fetch('https://api.bcb.gov.br/dados/serie/bcdata.sgs.4189/dados/ultimos/1?formato=json');
-                const data = await response.json();
-                return parseFloat(data[0].valor);
-            } catch (error) {
-                console.error('Erro ao buscar SELIC:', error);
-                return 13.75; // Valor fallback
-            }
-        }
-
-        async function buscarInflacao() {
-            try {
-                const response = await fetch('https://api.bcb.gov.br/dados/serie/bcdata.sgs.433/dados/ultimos/1?formato=json');
-                const data = await response.json();
-                return parseFloat(data[0].valor);
-            } catch (error) {
-                console.error('Erro ao buscar inflação:', error);
-                return 5.5; // Valor fallback
-            }
-        }
-
-        function calcularProjecao(dolarAtual, petroleo, ouro, selic, inflacao) {
-            // Fatores e pesos (ajuste conforme necessidade)
-            const k1 = 0.01;  // Petróleo
-            const k2 = 0.005; // Ouro
-            const k3 = -0.02; // SELIC
-            const k4 = 0.03;  // Inflação
-            const k5 = 0.001; // Risco País (fixo por falta de API)
-
-            const variacao = (petroleo * k1) + 
-                            (ouro * k2) + 
-                            (selic * k3) + 
-                            (inflacao * k4) + 
-                            (250 * k5); // 250 = risco país fixo
-
-            const projecaoMinima = dolarAtual * (1 + variacao - 0.05);
-            const projecaoMaxima = dolarAtual * (1 + variacao + 0.05);
-
-            document.getElementById('projecao-minima').textContent = `R$ ${projecaoMinima.toFixed(2)}`;
-            document.getElementById('projecao-maxima').textContent = `R$ ${projecaoMaxima.toFixed(2)}`;
-        }
-
-        // ... (mantenha o restante do código existente) ...
-
-        // Inicia a busca
-        buscarDolar();
-    </script>
+    main();
+  </script>
 </body>
 </html>
